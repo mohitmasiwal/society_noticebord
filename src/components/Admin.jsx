@@ -146,7 +146,7 @@ const Admin = () => {
   
       <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-semibold mb-6 text-indigo-300 text-center">
-          Submitted Problem
+          Submitted Problems
         </h2>
         {loadingProblems ? (
           <p className="text-center text-gray-400">Loading problems...</p>
