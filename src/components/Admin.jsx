@@ -144,7 +144,7 @@ const Admin = () => {
       </section>
 
   
-     
+      <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-semibold mb-6 text-indigo-300 text-center">
           Submitted Problems
         </h2>
