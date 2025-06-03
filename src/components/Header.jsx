@@ -7,14 +7,13 @@ const Header = () => {
   const dispatch = useDispatch();
   const login = useSelector((state) => state.auth.login);
 
-  // Fetch role from localStorage
-  const user = JSON.parse(localStorage.getItem("user"));
-  const role = user?.userRole || "";
+  // Get user role from localStorage
+  const userRole = localStorage.getItem("userRole");
 
   const handleLogout = () => {
     dispatch(logout());
     localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    localStorage.removeItem("userRole");
   };
 
   return (
@@ -22,47 +21,41 @@ const Header = () => {
       <h1 className="text-2xl font-bold">My Society</h1>
 
       <nav className="space-x-6 flex items-center">
+        {/* Admin Panel only for admin role */}
+        {login && userRole === "admin" && (
+          <Link
+            to="/admin"
+            className="bg-blue-800 px-4 py-2 rounded hover:bg-blue-900 transition"
+          >
+            Admin Panel
+          </Link>
+        )}
+
+        {/* Notice Panel visible always */}
+        <Link
+          to="/notice"
+          className="bg-blue-800 px-4 py-2 rounded hover:bg-blue-900 transition"
+        >
+          Notice Panel
+        </Link>
+
+        {/* Login or Logout buttons */}
         {login ? (
-          <>
-            {/* Only show admin panel if user role is 'admin' */}
-            {role === "admin" && (
-              <Link
-                to="/admin"
-                className="bg-blue-800 px-4 py-2 rounded hover:bg-blue-900 transition"
-              >
-                Admin Panel
-              </Link>
-            )}
-
-            <Link
-              to="/notice"
-              className="bg-blue-800 px-4 py-2 rounded hover:bg-blue-900 transition"
-            >
-              Notice Panel
-            </Link>
-
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 px-4 py-2 rounded hover:bg-red-700 transition ml-4"
-            >
-              Logout
-            </button>
-          </>
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 px-4 py-2 rounded hover:bg-red-700 transition ml-4"
+          >
+            Logout
+          </button>
         ) : (
           <>
-            <Link
-              to="/notice"
-              className="bg-blue-800 px-4 py-2 rounded hover:bg-blue-900 transition"
-            >
-              Notice Panel
-            </Link>
-
             <Link
               to="/login"
               className="bg-green-600 px-4 py-2 rounded hover:bg-green-700 transition"
             >
               Login
             </Link>
+            
           </>
         )}
       </nav>

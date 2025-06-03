@@ -1,5 +1,6 @@
  import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { getAuth } from "firebase/auth";
 import {
   addnotice,
   fetchnotice,
@@ -17,33 +18,33 @@ const Admin = () => {
 
   const dispatch = useDispatch();
   const { notice, loading, error } = useSelector((state) => state.notice);
-  const { problems, loading: loadingProblems, error: errorProblems } = useSelector(
-    (state) => state.problem
-  );
+  const {
+    problems,
+    loading: loadingProblems,
+    error: errorProblems,
+  } = useSelector((state) => state.problem);
 
   const [editId, setEditId] = useState(null);
+  const [commentStates, setCommentStates] = useState({});
+  const [updatingStatusIds, setUpdatingStatusIds] = useState(new Set());
+  const [updatingCommentIds, setUpdatingCommentIds] = useState(new Set());
 
-  // Local state to track problem edits per problem id
-  const [problemEdits, setProblemEdits] = useState({});
+  const auth = getAuth();
+  const user = auth.currentUser;
+  const userId = user ? user.uid : null;
 
   useEffect(() => {
     dispatch(fetchnotice());
     dispatch(fetchProblems());
   }, [dispatch]);
 
-  // Initialize problem edits state when problems load
   useEffect(() => {
-    if (problems.length > 0) {
-      const edits = {};
-      problems.forEach((p) => {
-        edits[p.id] = {
-          status: p.status || "pending",
-          adminComment: p.adminComment || "",
-          mobile: p.mobile || "",
-        };
-      });
-      setProblemEdits(edits);
-    }
+    // Initialize comment states from problems
+    const initialComments = {};
+    problems.forEach(
+      (p) => (initialComments[`${p.id}_${p.userId}`] = p.comment || "")
+    );
+    setCommentStates(initialComments);
   }, [problems]);
 
   const handleSubmit = (e) => {
@@ -60,17 +61,27 @@ const Admin = () => {
     const data = { title, description, date };
 
     if (editId) {
-      dispatch(updatenotice({ id: editId, updatedNotice: data }));
-      toast.success("Notice updated!");
-      setEditId(null);
+      dispatch(updatenotice({ id: editId, updatedNotice: data }))
+        .unwrap()
+        .then(() => {
+          toast.success("Notice updated!");
+          setEditId(null);
+          titleRef.current.value = "";
+          descriptionRef.current.value = "";
+          dateRef.current.value = "";
+        })
+        .catch(() => toast.error("Failed to update notice."));
     } else {
-      dispatch(addnotice(data));
-      toast.success("Notice added!");
+      dispatch(addnotice(data))
+        .unwrap()
+        .then(() => {
+          toast.success("Notice added!");
+          titleRef.current.value = "";
+          descriptionRef.current.value = "";
+          dateRef.current.value = "";
+        })
+        .catch(() => toast.error("Failed to add notice."));
     }
-
-    titleRef.current.value = "";
-    descriptionRef.current.value = "";
-    dateRef.current.value = "";
   };
 
   const handleEdit = (notice) => {
@@ -81,30 +92,69 @@ const Admin = () => {
   };
 
   const handleDelete = (id) => {
-    dispatch(deletenotice(id));
-    toast.info("Notice deleted.");
+    if (
+      window.confirm(
+        "Are you sure you want to delete this notice? This action cannot be undone."
+      )
+    ) {
+      dispatch(deletenotice(id))
+        .unwrap()
+        .then(() => toast.info("Notice deleted."))
+        .catch(() => toast.error("Failed to delete notice."));
+    }
   };
 
-  // Handle change for problem edits inputs
-  const handleProblemChange = (id, field, value) => {
-    setProblemEdits((prev) => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: value,
-      },
-    }));
-  };
+  const handleStatusChange = (problem, newStatus) => {
+    const key = `${problem.id}_${problem.userId}`;
+    setUpdatingStatusIds((prev) => new Set(prev).add(key));
 
-  // Handle update problem button
-  const handleUpdateProblem = (id) => {
-    const updates = problemEdits[id];
-    if (!updates) return;
-
-    dispatch(updateProblem({ id, updates }))
+    dispatch(
+      updateProblem({
+        userId: problem.userId,
+        id: problem.id,
+        updates: { status: newStatus },
+      })
+    )
       .unwrap()
-      .then(() => toast.success("Problem updated successfully"))
-      .catch(() => toast.error("Failed to update problem"));
+      .then(() => toast.success("Status updated"))
+      .catch(() => toast.error("Failed to update status"))
+      .finally(() => {
+        setUpdatingStatusIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(key);
+          return newSet;
+        });
+      });
+  };
+
+  const handleCommentUpdate = (problem) => {
+    const key = `${problem.id}_${problem.userId}`;
+    const newComment = commentStates[key] || "";
+
+    if (newComment.trim() === problem.comment) {
+      toast.info("No changes to update.");
+      return;
+    }
+
+    setUpdatingCommentIds((prev) => new Set(prev).add(key));
+
+    dispatch(
+      updateProblem({
+        userId: problem.userId,
+        id: problem.id,
+        updates: { comment: newComment },
+      })
+    )
+      .unwrap()
+      .then(() => toast.success("Comment updated"))
+      .catch(() => toast.error("Failed to update comment"))
+      .finally(() => {
+        setUpdatingCommentIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(key);
+          return newSet;
+        });
+      });
   };
 
   return (
@@ -114,30 +164,40 @@ const Admin = () => {
       </h2>
 
       <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6 mb-10 hover:shadow-amber-300 transition">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Title"
-            ref={titleRef}
-            required
-            className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <textarea
-            placeholder="Description"
-            ref={descriptionRef}
-            required
-            rows={4}
-            className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <input
-            type="date"
-            ref={dateRef}
-            required
-            className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <form onSubmit={handleSubmit} className="space-y-4" aria-label="Notice form">
+          <label className="block">
+            <span className="text-gray-300 mb-1 block">Title</span>
+            <input
+              type="text"
+              placeholder="Title"
+              ref={titleRef}
+              required
+              className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </label>
+          <label className="block">
+            <span className="text-gray-300 mb-1 block">Description</span>
+            <textarea
+              placeholder="Description"
+              ref={descriptionRef}
+              required
+              rows={4}
+              className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </label>
+          <label className="block">
+            <span className="text-gray-300 mb-1 block">Date</span>
+            <input
+              type="date"
+              ref={dateRef}
+              required
+              className="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </label>
           <button
             type="submit"
             className="w-full bg-indigo-600 hover:bg-indigo-700 transition text-white py-2 rounded font-semibold"
+            aria-label={editId ? "Update Notice" : "Add Notice"}
           >
             {editId ? "Update Notice" : "Add Notice"}
           </button>
@@ -167,12 +227,14 @@ const Admin = () => {
                   <button
                     onClick={() => handleEdit(item)}
                     className="px-4 py-1 bg-yellow-500 hover:bg-yellow-600 rounded text-gray-900 font-semibold transition"
+                    aria-label={`Edit notice titled ${item.title}`}
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="px-4 py-1 bg-red-600 hover:bg-red-700 rounded text-white font-semibold transition"
+                    aria-label={`Delete notice titled ${item.title}`}
                   >
                     Delete
                   </button>
@@ -183,7 +245,7 @@ const Admin = () => {
         )}
       </section>
 
-      {/* PROBLEM SECTION WITH UPDATE FORM */}
+      {/* Submitted Problems Section */}
       <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-semibold mb-6 text-indigo-300 text-center">
           Submitted Problems
@@ -195,73 +257,66 @@ const Admin = () => {
         ) : problems.length === 0 ? (
           <p className="text-center text-gray-400">No problems submitted yet.</p>
         ) : (
-          <ul className="space-y-6">
-            {problems.map((problem) => (
-              <li
-                key={problem.id}
-                className="bg-gray-700 rounded p-4 border border-gray-600"
-              >
-                <p className="font-semibold text-indigo-400">Name: {problem.name}</p>
-                <p className="mt-1 text-gray-300">Problem: {problem.problem}</p>
+          <ul className="space-y-4" aria-label="Submitted problems list">
+            {problems.map((problem) => {
+              const key = `${problem.id}_${problem.userId}`;
+              return (
+                <li
+                  key={key}
+                  className="bg-gray-700 rounded p-4 border border-gray-600 space-y-2"
+                  aria-live="polite"
+                >
+                  <p className="font-semibold text-indigo-400">Name: {problem.username}</p>
+                  <p className="text-gray-300">Mobile: {problem.mobile || "N/A"}</p>
+                  <p className="text-gray-300">Problem: {problem.problem}</p>
+                  <p className="text-sm text-yellow-400">Status: {problem.status}</p>
+                  <p className="text-sm text-gray-400">Comment: {problem.comment}</p>
 
-                <div className="mt-3 space-y-2">
-                  {/* Status */}
-                  <label className="block text-gray-300 font-semibold">
-                    Status:
+                  <div className="mt-3 space-y-2">
+                    <label htmlFor={`status-select-${key}`} className="sr-only">
+                      Update status for problem by {problem.username}
+                    </label>
                     <select
-                      value={problemEdits[problem.id]?.status || "pending"}
-                      onChange={(e) =>
-                        handleProblemChange(problem.id, "status", e.target.value)
-                      }
-                      className="ml-2 rounded bg-gray-600 px-2 py-1"
+                      id={`status-select-${key}`}
+                      value={problem.status}
+                      onChange={(e) => handleStatusChange(problem, e.target.value)}
+                      className="px-2 py-1 rounded bg-gray-800 border border-gray-500 text-white"
+                      disabled={updatingStatusIds.has(key)}
+                      aria-busy={updatingStatusIds.has(key)}
+                      aria-live="polite"
                     >
                       <option value="pending">Pending</option>
-                      <option value="not pending">Not Pending</option>
+                      <option value="fulfilled">Fulfilled</option>
                     </select>
-                  </label>
 
-                  {/* Admin Comment */}
-                  <label className="block text-gray-300 font-semibold">
-                    Admin Comment:
-                    <textarea
-                      rows={2}
-                      value={problemEdits[problem.id]?.adminComment || ""}
-                      onChange={(e) =>
-                        handleProblemChange(problem.id, "adminComment", e.target.value)
-                      }
-                      className="w-full mt-1 rounded bg-gray-600 px-2 py-1 resize-none"
-                    />
-                  </label>
-
-                  {/* Mobile Number */}
-                  <label className="block text-gray-300 font-semibold">
-                    Mobile Number:
-                    <input
-                      type="text"
-                      value={problemEdits[problem.id]?.mobile || ""}
-                      onChange={(e) =>
-                        handleProblemChange(problem.id, "mobile", e.target.value)
-                      }
-                      className="w-full mt-1 rounded bg-gray-600 px-2 py-1"
-                    />
-                  </label>
-
-                  {/* User Comment (readonly) */}
-                  {problem.userComment && (
-                    <p className="mt-2 text-sm italic text-gray-400">
-                      <strong>User Comment:</strong> {problem.userComment}
-                    </p>
-                  )}
-
-                  <button
-                    onClick={() => handleUpdateProblem(problem.id)}
-                    className="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-4 rounded font-semibold transition"
-                  >
-                    Update Problem
-                  </button>
-                </div>
-              </li>
-            ))}
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        aria-label={`Admin comment for problem by ${problem.username}`}
+                        value={commentStates[key] || ""}
+                        onChange={(e) =>
+                          setCommentStates({
+                            ...commentStates,
+                            [key]: e.target.value,
+                          })
+                        }
+                        placeholder="Add admin comment"
+                        className="flex-grow px-2 py-1 rounded bg-gray-800 border border-gray-500 text-white"
+                        disabled={updatingCommentIds.has(key)}
+                      />
+                      <button
+                        onClick={() => handleCommentUpdate(problem)}
+                        className="bg-green-600 hover:bg-green-700 px-4 py-1 rounded text-white font-semibold"
+                        disabled={updatingCommentIds.has(key)}
+                        aria-label={`Post comment for problem by ${problem.username}`}
+                      >
+                        {updatingCommentIds.has(key) ? "Posting..." : "POST"}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

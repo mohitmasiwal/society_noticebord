@@ -27,7 +27,7 @@ const Login = () => {
       const token = userCredential.user.accessToken;
       const uid = userCredential.user.uid;
 
-      // Fetch user role and other info from Realtime DB
+ 
       const userRef = ref(db, `users/${uid}`);
       const snapshot = await get(userRef);
 

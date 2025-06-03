@@ -33,12 +33,8 @@ function App() {
         <Route
           path="/admin"
           element={
-            savedToken ? (
-              userRole === "admin" ? (
-                <Admin />
-              ) : (
-                <Notice />
-              )
+            savedToken && userRole === "admin" ? (
+              <Admin />
             ) : (
               <Navigate to="/login" replace />
             )
