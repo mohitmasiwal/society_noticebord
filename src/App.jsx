@@ -10,41 +10,48 @@ import { loginSuccess } from "./Redux/AuthSlice";
 
 function App() {
   const dispatch = useDispatch();
-   
-  
   const [loading, setLoading] = useState(true);
 
   const savedToken = localStorage.getItem("token");
+  const userRole = localStorage.getItem("userRole");
+
   useEffect(() => {
     if (savedToken) {
       dispatch(loginSuccess(savedToken));
     }
     setLoading(false);
-  }, [dispatch]);
+  }, [dispatch, savedToken]);
 
   if (loading) {
-    return <div>Loading...</div>;  
+    return <div>Loading...</div>;
   }
 
   return (
     <Router>
       <Header />
       <Routes>
-       
         <Route
           path="/admin"
-          element={ savedToken && <Admin/>}
+          element={
+            savedToken ? (
+              userRole === "admin" ? (
+                <Admin />
+              ) : (
+                <Notice />
+              )
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
 
-      
         <Route path="/notice" element={<Notice />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Notice/>} /> 
+        <Route path="/" element={<Notice />} />
       </Routes>
     </Router>
   );
 }
 
 export default App;
-

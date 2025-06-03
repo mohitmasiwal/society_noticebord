@@ -1,6 +1,7 @@
  import React, { useRef } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../Firebase/Firebase";
+import { auth, db } from "../Firebase/Firebase";
+import { ref, get } from "firebase/database";
 import { useDispatch } from "react-redux";
 import { loginStart, loginSuccess, loginFailure } from "../Redux/AuthSlice";
 import { ToastContainer, toast } from "react-toastify";
@@ -11,8 +12,7 @@ const Login = () => {
   const emailRef = useRef();
   const passwordRef = useRef();
   const dispatch = useDispatch();
-   const navigate = useNavigate();
-
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -25,13 +25,30 @@ const Login = () => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = userCredential.user.accessToken;
+      const uid = userCredential.user.uid;
 
-      dispatch(loginSuccess(token));
-       navigate("/")
-      toast.success("Login successful!", {
-        position: "top-center",
-        autoClose: 3000,
-      });
+      // Fetch user role and other info from Realtime DB
+      const userRef = ref(db, `users/${uid}`);
+      const snapshot = await get(userRef);
+
+      if (snapshot.exists()) {
+        const userData = snapshot.val();
+        const role = userData.role || "user";
+
+        
+        localStorage.setItem("userRole", role);
+        localStorage.setItem("userName", userData.name || "User");
+
+        dispatch(loginSuccess(token));
+        toast.success("Login successful!", {
+          position: "top-center",
+          autoClose: 3000,
+        });
+
+        navigate("/");
+      } else {
+        throw new Error("User data not found in database.");
+      }
     } catch (error) {
       dispatch(loginFailure(error.message));
       toast.error(error.message, {
@@ -44,7 +61,7 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <form onSubmit={handleLogin} className="bg-white p-6 rounded shadow-md w-full max-w-sm">
-        <h2 className="text-xl font-semibold mb-4 text-center">Admin Login</h2>
+        <h2 className="text-xl font-semibold mb-4 text-center">  Login</h2>
 
         <input
           type="email"

@@ -7,7 +7,7 @@ import {
   deletenotice,
 } from "../Redux/Noticeslice";
 
-import { fetchProblems } from "../Redux/ProblemSlice";  
+import { fetchProblems, updateProblem } from "../Redux/ProblemSlice";
 import { toast } from "react-toastify";
 
 const Admin = () => {
@@ -18,15 +18,33 @@ const Admin = () => {
   const dispatch = useDispatch();
   const { notice, loading, error } = useSelector((state) => state.notice);
   const { problems, loading: loadingProblems, error: errorProblems } = useSelector(
-    (state) => state.problem  
+    (state) => state.problem
   );
 
   const [editId, setEditId] = useState(null);
+
+  // Local state to track problem edits per problem id
+  const [problemEdits, setProblemEdits] = useState({});
 
   useEffect(() => {
     dispatch(fetchnotice());
     dispatch(fetchProblems());
   }, [dispatch]);
+
+  // Initialize problem edits state when problems load
+  useEffect(() => {
+    if (problems.length > 0) {
+      const edits = {};
+      problems.forEach((p) => {
+        edits[p.id] = {
+          status: p.status || "pending",
+          adminComment: p.adminComment || "",
+          mobile: p.mobile || "",
+        };
+      });
+      setProblemEdits(edits);
+    }
+  }, [problems]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -67,13 +85,35 @@ const Admin = () => {
     toast.info("Notice deleted.");
   };
 
+  // Handle change for problem edits inputs
+  const handleProblemChange = (id, field, value) => {
+    setProblemEdits((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value,
+      },
+    }));
+  };
+
+  // Handle update problem button
+  const handleUpdateProblem = (id) => {
+    const updates = problemEdits[id];
+    if (!updates) return;
+
+    dispatch(updateProblem({ id, updates }))
+      .unwrap()
+      .then(() => toast.success("Problem updated successfully"))
+      .catch(() => toast.error("Failed to update problem"));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
       <h2 className="text-3xl font-extrabold mb-8 text-center text-indigo-400">
         Admin Notice Panel
       </h2>
 
-      <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6 mb-10  hover:shadow-amber-300 transition">
+      <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6 mb-10 hover:shadow-amber-300 transition">
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
@@ -116,7 +156,7 @@ const Admin = () => {
             {notice.map((item) => (
               <div
                 key={item.id}
-                className="p-5 bg-gray-800 rounded shadow flex justify-between items-start   hover:shadow-amber-300 transition"
+                className="p-5 bg-gray-800 rounded shadow flex justify-between items-start hover:shadow-amber-300 transition"
               >
                 <div>
                   <h4 className="text-lg font-bold text-indigo-300">{item.title}</h4>
@@ -143,7 +183,7 @@ const Admin = () => {
         )}
       </section>
 
-  
+      {/* PROBLEM SECTION WITH UPDATE FORM */}
       <section className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-semibold mb-6 text-indigo-300 text-center">
           Submitted Problems
@@ -155,7 +195,7 @@ const Admin = () => {
         ) : problems.length === 0 ? (
           <p className="text-center text-gray-400">No problems submitted yet.</p>
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-6">
             {problems.map((problem) => (
               <li
                 key={problem.id}
@@ -163,7 +203,63 @@ const Admin = () => {
               >
                 <p className="font-semibold text-indigo-400">Name: {problem.name}</p>
                 <p className="mt-1 text-gray-300">Problem: {problem.problem}</p>
-                
+
+                <div className="mt-3 space-y-2">
+                  {/* Status */}
+                  <label className="block text-gray-300 font-semibold">
+                    Status:
+                    <select
+                      value={problemEdits[problem.id]?.status || "pending"}
+                      onChange={(e) =>
+                        handleProblemChange(problem.id, "status", e.target.value)
+                      }
+                      className="ml-2 rounded bg-gray-600 px-2 py-1"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="not pending">Not Pending</option>
+                    </select>
+                  </label>
+
+                  {/* Admin Comment */}
+                  <label className="block text-gray-300 font-semibold">
+                    Admin Comment:
+                    <textarea
+                      rows={2}
+                      value={problemEdits[problem.id]?.adminComment || ""}
+                      onChange={(e) =>
+                        handleProblemChange(problem.id, "adminComment", e.target.value)
+                      }
+                      className="w-full mt-1 rounded bg-gray-600 px-2 py-1 resize-none"
+                    />
+                  </label>
+
+                  {/* Mobile Number */}
+                  <label className="block text-gray-300 font-semibold">
+                    Mobile Number:
+                    <input
+                      type="text"
+                      value={problemEdits[problem.id]?.mobile || ""}
+                      onChange={(e) =>
+                        handleProblemChange(problem.id, "mobile", e.target.value)
+                      }
+                      className="w-full mt-1 rounded bg-gray-600 px-2 py-1"
+                    />
+                  </label>
+
+                  {/* User Comment (readonly) */}
+                  {problem.userComment && (
+                    <p className="mt-2 text-sm italic text-gray-400">
+                      <strong>User Comment:</strong> {problem.userComment}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => handleUpdateProblem(problem.id)}
+                    className="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-4 rounded font-semibold transition"
+                  >
+                    Update Problem
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
